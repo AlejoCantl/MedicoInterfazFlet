@@ -9,20 +9,18 @@ class AtencionView:
         self.cita_id = cita_id
         self.paciente_id = paciente_id
         
-        # Colores consistentes
-        self.COLOR_PRIMARIO = "#007BFF"  # Azul (Botones principales)
-        self.COLOR_TEXTO = "#343A40"     # Gris oscuro (Texto principal)
-        self.COLOR_EXITO = "#28A745"     # Verde (Guardar)
-        self.COLOR_ERROR = "#DC3545"     # Rojo (Volver/Error)
-        self.COLOR_FONDO_CARD = "#F8F9FA" # Gris claro para fondo de tarjetas
+        # Colores consistentes con otras vistas
+        self.COLOR_PRIMARIO = "#007BFF"
+        self.COLOR_TEXTO = "#343A40"
+        self.COLOR_EXITO = "#28A745"
+        self.COLOR_ERROR = "#DC3545"
+        self.COLOR_FONDO_CLARO = "#F8F9FA"
 
-        # Estilo de texto centralizado para los TextField
+        # Estilos de texto
         text_style = ft.TextStyle(font_family="Roboto", color=self.COLOR_TEXTO)
-        
-        # Estilo para las etiquetas de los TextField
         label_style = ft.TextStyle(font_family="Roboto", color=self.COLOR_PRIMARIO, weight=ft.FontWeight.BOLD)
 
-        # 🛑 CORRECCIÓN DE FONT Y MEJORAS DE UX en TextField
+        # Campos del formulario
         self.sistema = ft.TextField(
             label="Sistema afectado (Motivo de Consulta)", 
             multiline=True, 
@@ -33,7 +31,7 @@ class AtencionView:
             border_radius=10,
             text_style=text_style,
             label_style=label_style,
-            hint_text="Describe los síntomas y sistemas involucrados."
+            hint_text="Describe los síntomas y sistemas involucrados"
         )
         self.diagnostico = ft.TextField(
             label="Diagnóstico (CIE-10)", 
@@ -45,7 +43,7 @@ class AtencionView:
             border_radius=10,
             text_style=text_style,
             label_style=label_style,
-            hint_text="Escribe el diagnóstico médico."
+            hint_text="Escribe el diagnóstico médico"
         )
         self.recomendaciones = ft.TextField(
             label="Recomendaciones y Tratamiento", 
@@ -57,57 +55,69 @@ class AtencionView:
             border_radius=10,
             text_style=text_style,
             label_style=label_style,
-            hint_text="Detalla el plan de manejo y seguimiento."
+            hint_text="Detalla el plan de manejo y seguimiento"
         )
+        
         self.uploaded_images = []
-        self.yolo_results = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True) # expand para usar el espacio
+        self.yolo_results = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO)
         self.file_picker = ft.FilePicker(on_result=self.on_files_selected)
         page.overlay.append(self.file_picker)
 
         self.paciente_info = self.api.get_paciente_info(self.paciente_id)
-        
-        # CONTROLES DE IMAGEN (para mostrar cuántas hay)
-        self.image_count_text = ft.Text("0 imágenes adjuntas", color=self.COLOR_TEXTO)
+        self.image_count_text = ft.Text(
+            "0 imágenes adjuntas", 
+            color=self.COLOR_TEXTO,
+            font_family="Roboto",
+            weight=ft.FontWeight.W_500
+        )
 
-        # 🛑 CORRECCIÓN 1: Inicializar page.snack_bar en el constructor
+        # Inicializar SnackBar
         self.page.snack_bar = ft.SnackBar(
             content=ft.Text("Mensaje temporal"),
-            duration=4000
+            duration=3000
         )
 
     def _show_snack_bar(self, message: str, color: str):
-        """Método auxiliar para mostrar el SnackBar de la forma correcta."""
+        """Muestra notificaciones al usuario."""
         self.page.snack_bar.content = ft.Text(message, font_family="Roboto")
         self.page.snack_bar.bgcolor = color
         self.page.snack_bar.open = True
         self.page.update()
 
     def on_files_selected(self, e: ft.FilePickerResultEvent):
+        """Maneja la selección de archivos."""
         if e.files:
             self.uploaded_images = e.files
-            self.image_count_text.value = f"{len(e.files)} imágenes adjuntas"
-            # 🛑 CORRECCIÓN 2: Usar el método auxiliar
+            self.image_count_text.value = f"✅ {len(e.files)} imágenes adjuntas"
+            self.image_count_text.color = self.COLOR_EXITO
             self._show_snack_bar(
-                f"{len(e.files)} imágenes cargadas exitosamente.", 
+                f"✅ {len(e.files)} imágenes cargadas exitosamente", 
                 self.COLOR_EXITO
             )
         else:
-            self.image_count_text.value = "0 imágenes adjuntas"
-            # 🛑 CORRECCIÓN 3: Usar el método auxiliar
-            self._show_snack_bar(
-                "Carga de imágenes cancelada.", 
-                self.COLOR_ERROR
-            )
+            self.image_count_text.value = "❌ 0 imágenes adjuntas"
+            self.image_count_text.color = self.COLOR_ERROR
         self.page.update()
 
-    # atencion_view.py (Método guardar_atencion)
+    def resetear_formulario(self):
+        """Resetea todos los campos del formulario."""
+        self.sistema.value = ""
+        self.diagnostico.value = ""
+        self.recomendaciones.value = ""
+        self.uploaded_images = []
+        self.image_count_text.value = "0 imágenes adjuntas"
+        self.image_count_text.color = self.COLOR_TEXTO
+        self.page.update()
 
     def guardar_atencion(self, e):
+        """Guarda la atención médica y procesa las imágenes con YOLO."""
         if not all([self.sistema.value, self.diagnostico.value, self.recomendaciones.value]):
-            self._show_snack_bar("🔴 Complete todos los campos obligatorios.", self.COLOR_ERROR)
+            self._show_snack_bar("⚠️ Complete todos los campos obligatorios", self.COLOR_ERROR)
             return
 
+        # Deshabilitar botón mientras procesa
         e.control.disabled = True
+        e.control.text = "Procesando..."
         self.page.update()
 
         response = self.api.registrar_atencion(
@@ -118,191 +128,380 @@ class AtencionView:
             imagenes=self.uploaded_images
         )
         
+        # Rehabilitar botón
         e.control.disabled = False
+        e.control.text = "Guardar Atención"
+        self.page.update()
 
         if "error" not in response:
+            # Limpiar resultados anteriores
             self.yolo_results.controls.clear()
             
-            yolo_header = ft.Text("✅ Resultados de Detección (YOLO)", size=18, weight=ft.FontWeight.BOLD, color=self.COLOR_TEXTO, font_family="Roboto")
-            self.yolo_results.controls.append(yolo_header)
-            self.yolo_results.controls.append(ft.Divider())
-
-            
-            # 🛑 CORRECCIÓN CLAVE: El bucle principal ahora itera sobre listas de detecciones por imagen.
-            # 'detecciones_por_imagen' es ahora una lista, no un diccionario.
-            # Ya no podemos acceder a 'res.get("ruta", "N/A")', porque 'res' es una lista. 
-            # Usaremos el índice (idx) para simular el nombre de la imagen.
-
             resultados_yolo = response.get("detections", [])
             
-            for idx, detecciones_por_imagen in enumerate(resultados_yolo):
-                
-                # La lista de detecciones individuales (d) es el elemento actual.
-                detections_list = ft.Column([
-                    ft.Text(
-                        f"• {d.get('class', 'N/A')} ({d.get('confidence', 0.0):.2f})", 
-                        color=self.COLOR_TEXTO, 
-                        font_family="Roboto", 
-                        size=13
+            if resultados_yolo and len(resultados_yolo) > 0:
+                # Header de resultados
+                self.yolo_results.controls.append(
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Icon(ft.Icons.CHECK_CIRCLE, color=self.COLOR_EXITO, size=24),
+                            ft.Text(
+                                "Detecciones realizadas con éxito", 
+                                size=16, 
+                                weight=ft.FontWeight.BOLD,
+                                color=self.COLOR_EXITO,
+                                font_family="Roboto"
+                            ),
+                        ]),
+                        padding=10,
+                        bgcolor=ft.Colors.with_opacity(0.1, self.COLOR_EXITO),
+                        border_radius=10,
                     )
-                    # 🛑 CORRECCIÓN: Iteramos directamente sobre la lista 'detecciones_por_imagen'
-                    for d in detecciones_por_imagen
-                ], spacing=3)
-                
-                # 🛑 AJUSTE VISUAL: Ya que 'ruta' no está, usamos el índice y el nombre original del archivo.
-                imagen_name = self.uploaded_images[idx].name if idx < len(self.uploaded_images) else f"Imagen {idx + 1}"
-                
-                card = ft.Card(
-                    content=ft.Container(
-                        content=ft.Column([
-                            ft.Text(f"🔬 Imagen: {os.path.basename(imagen_name)}", weight=ft.FontWeight.BOLD, color=self.COLOR_PRIMARIO, font_family="Roboto"),
-                            ft.Text(f"Detecciones totales: {len(detecciones_por_imagen)}", color=self.COLOR_TEXTO, font_family="Roboto", size=14),
-                            detections_list
-                        ], spacing=8),
-                        padding=15,
-                        bgcolor=ft.Colors.WHITE
-                    ),
-                    elevation=3,
-                    margin=5
                 )
-                self.yolo_results.controls.append(card)
+                
+                # Procesar cada imagen
+                for idx, detecciones_por_imagen in enumerate(resultados_yolo):
+                    imagen_name = self.uploaded_images[idx].name if idx < len(self.uploaded_images) else f"Imagen {idx + 1}"
+                    
+                    # Crear lista de detecciones
+                    if detecciones_por_imagen:
+                        detections_widgets = []
+                        for d in detecciones_por_imagen:
+                            confidence = d.get('confidence', 0.0)
+                            confidence_color = self.COLOR_EXITO if confidence > 0.7 else self.COLOR_PRIMARIO if confidence > 0.5 else self.COLOR_ERROR
+                            
+                            detections_widgets.append(
+                                ft.Container(
+                                    content=ft.Row([
+                                        ft.Icon(ft.Icons.CIRCLE, size=8, color=confidence_color),
+                                        ft.Text(
+                                            f"{d.get('class', 'N/A')}", 
+                                            color=self.COLOR_TEXTO,
+                                            font_family="Roboto",
+                                            weight=ft.FontWeight.W_500,
+                                            size=14
+                                        ),
+                                        ft.Container(expand=True),
+                                        ft.Text(
+                                            f"{confidence:.1%}", 
+                                            color=confidence_color,
+                                            font_family="Roboto",
+                                            weight=ft.FontWeight.BOLD,
+                                            size=13
+                                        ),
+                                    ]),
+                                    padding=5,
+                                )
+                            )
+                    else:
+                        detections_widgets = [
+                            ft.Text(
+                                "No se detectaron objetos en esta imagen",
+                                color=ft.Colors.GREY_600,
+                                font_family="Roboto",
+                                italic=True,
+                                size=13
+                            )
+                        ]
+                    
+                    # Card para cada imagen
+                    card = ft.Container(
+                        content=ft.Column([
+                            # Header de la imagen
+                            ft.Container(
+                                content=ft.Row([
+                                    ft.Icon(ft.Icons.IMAGE, color=self.COLOR_PRIMARIO, size=20),
+                                    ft.Text(
+                                        os.path.basename(imagen_name),
+                                        weight=ft.FontWeight.BOLD,
+                                        color=self.COLOR_PRIMARIO,
+                                        font_family="Roboto",
+                                        size=15
+                                    ),
+                                    ft.Container(expand=True),
+                                    ft.Container(
+                                        content=ft.Text(
+                                            f"{len(detecciones_por_imagen)} detecciones",
+                                            color=ft.Colors.WHITE,
+                                            font_family="Roboto",
+                                            size=12,
+                                            weight=ft.FontWeight.BOLD
+                                        ),
+                                        padding=ft.padding.symmetric(horizontal=10, vertical=5),
+                                        bgcolor=self.COLOR_PRIMARIO,
+                                        border_radius=15
+                                    )
+                                ]),
+                                padding=10,
+                                bgcolor=ft.Colors.with_opacity(0.05, self.COLOR_PRIMARIO),
+                            ),
+                            # Lista de detecciones
+                            ft.Container(
+                                content=ft.Column(detections_widgets, spacing=2),
+                                padding=10,
+                            )
+                        ]),
+                        bgcolor=ft.Colors.WHITE,
+                        border=ft.border.all(1, ft.Colors.GREY_300),
+                        border_radius=10,
+                        padding=5,
+                        margin=5,
+                    )
+                    self.yolo_results.controls.append(card)
+            else:
+                # No hay detecciones
+                self.yolo_results.controls.append(
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Icon(ft.Icons.INFO_OUTLINE, size=40, color=ft.Colors.GREY_400),
+                            ft.Text(
+                                "No se procesaron imágenes",
+                                size=14,
+                                color=ft.Colors.GREY_600,
+                                font_family="Roboto",
+                                text_align=ft.TextAlign.CENTER
+                            )
+                        ], 
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=10),
+                        padding=30,
+                        alignment=ft.alignment.center
+                    )
+                )
 
-            self._show_snack_bar("👍 Atención guardada con éxito. Resultados YOLO actualizados.", self.COLOR_EXITO)
+            self._show_snack_bar("✅ Atención guardada exitosamente", self.COLOR_EXITO)
+            # 🛑 CORRECCIÓN: Resetear el formulario después de guardar
+            self.resetear_formulario()
         else:
-            self._show_snack_bar(f"❌ Error al guardar: {response.get('error', 'Error desconocido')}", self.COLOR_ERROR)
+            self._show_snack_bar(
+                f"❌ Error: {response.get('error', 'Error desconocido')}", 
+                self.COLOR_ERROR
+            )
 
         self.page.update()
 
     def show(self):
         self.page.clean()
-        
-        # 1. TARJETA DE INFORMACIÓN DEL PACIENTE (Más detallada y visual)
-        paciente_card_content = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Text("👤 Información del Paciente", size=20, weight=ft.FontWeight.BOLD, color=self.COLOR_PRIMARIO, font_family="Roboto"),
-                    ft.Divider(color=self.COLOR_PRIMARIO),
-                    ft.Row([
-                        ft.Icon(ft.Icons.PERSON_OUTLINE, color=self.COLOR_TEXTO),
-                        ft.Text(f"Paciente: {self.paciente_info.get('paciente', 'N/A')}", size=16, color=self.COLOR_TEXTO, font_family="Roboto", weight=ft.FontWeight.BOLD),
-                    ]),
-                    ft.Row([
-                        ft.Icon(ft.Icons.MAIL_OUTLINE, color=self.COLOR_TEXTO, size=18),
-                        ft.Text(f"Correo: {self.paciente_info.get('correo', 'N/A')}", color=self.COLOR_TEXTO, font_family="Roboto"),
-                        ft.VerticalDivider(),
-                        ft.Icon(ft.Icons.CALENDAR_TODAY_OUTLINED, color=self.COLOR_TEXTO, size=18),
-                        ft.Text(f"Edad: {self.paciente_info.get('edad', 'N/A')} años", color=self.COLOR_TEXTO, font_family="Roboto"),
-                    ], spacing=15),
-                    ft.Row([
-                        ft.Icon(ft.Icons.BALANCE_OUTLINED, color=self.COLOR_TEXTO, size=18),
-                        ft.Text(f"Peso/Talla: {self.paciente_info.get('peso', 'N/A')} / {self.paciente_info.get('talla', 'N/A')}", color=self.COLOR_TEXTO, font_family="Roboto"),
-                        ft.VerticalDivider(),
-                        ft.Icon(ft.Icons.LOCAL_HOSPITAL_OUTLINED, color=self.COLOR_TEXTO, size=18),
-                        ft.Text(f"Tipo: {self.paciente_info.get('tipo_paciente', 'N/A')}", color=self.COLOR_TEXTO, font_family="Roboto"),
-                    ], spacing=15),
-                    ft.Row([
-                         ft.Icon(ft.Icons.MEDICAL_INFORMATION_OUTLINED, color=self.COLOR_ERROR, size=18),
-                         ft.Text(f"Enfermedades crónicas: {self.paciente_info.get('enfermedades', 'N/A')}", color=self.COLOR_ERROR, font_family="Roboto", weight=ft.FontWeight.W_500),
-                    ]),
-                ], 
-                spacing=8
-            ),
+
+        # 🎯 Header con título centrado
+        header = ft.Container(
+            content=ft.Row([
+                ft.Container(
+                    content=ft.ElevatedButton(
+                        "Volver",
+                        icon=ft.Icons.ARROW_BACK,
+                        bgcolor=self.COLOR_PRIMARIO,
+                        color=ft.Colors.WHITE,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
+                        on_click=lambda e: self.on_navigate("citas")
+                    ),
+                    width=100,
+                ),
+                ft.Container(
+                    content=ft.Text(
+                        "ATENCIÓN MÉDICA",
+                        size=28,
+                        weight=ft.FontWeight.W_900,
+                        color=self.COLOR_PRIMARIO,
+                        font_family="Roboto",
+                        text_align=ft.TextAlign.CENTER
+                    ),
+                    expand=True,
+                    alignment=ft.alignment.center
+                ),
+                ft.Container(width=100),  # Espacio para mantener simetría
+            ]),
             padding=20,
-            bgcolor=self.COLOR_FONDO_CARD
+            bgcolor=ft.Colors.WHITE,
+            border_radius=10,
+            margin=10,
         )
-        paciente_card = ft.Card(content=paciente_card_content, elevation=8, margin=ft.margin.only(bottom=20))
+
+        # 1. TARJETA DE INFORMACIÓN DEL PACIENTE
+        paciente_card = ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.PERSON, color=self.COLOR_PRIMARIO, size=28),
+                        ft.Text(
+                            "Información del Paciente",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=self.COLOR_TEXTO,
+                            font_family="Roboto"
+                        ),
+                    ]),
+                    ft.Divider(height=10, color=ft.Colors.GREY_300),
+                    ft.Row([
+                        ft.Column([
+                            ft.Text("Nombre:", size=12, color=ft.Colors.GREY_600, font_family="Roboto"),
+                            ft.Text(
+                                self.paciente_info.get('paciente', 'N/A'),
+                                size=15,
+                                weight=ft.FontWeight.W_600,
+                                color=self.COLOR_TEXTO,
+                                font_family="Roboto"
+                            ),
+                        ], spacing=2),
+                        ft.VerticalDivider(),
+                        ft.Column([
+                            ft.Text("Edad:", size=12, color=ft.Colors.GREY_600, font_family="Roboto"),
+                            ft.Text(
+                                f"{self.paciente_info.get('edad', 'N/A')} años",
+                                size=15,
+                                weight=ft.FontWeight.W_600,
+                                color=self.COLOR_TEXTO,
+                                font_family="Roboto"
+                            ),
+                        ], spacing=2),
+                        ft.VerticalDivider(),
+                        ft.Column([
+                            ft.Text("Tipo:", size=12, color=ft.Colors.GREY_600, font_family="Roboto"),
+                            ft.Text(
+                                self.paciente_info.get('tipo_paciente', 'N/A'),
+                                size=15,
+                                weight=ft.FontWeight.W_600,
+                                color=self.COLOR_TEXTO,
+                                font_family="Roboto"
+                            ),
+                        ], spacing=2),
+                    ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+                    ft.Row([
+                        ft.Icon(ft.Icons.EMAIL_OUTLINED, size=18, color=ft.Colors.GREY_600),
+                        ft.Text(
+                            self.paciente_info.get('correo', 'N/A'),
+                            size=13,
+                            color=self.COLOR_TEXTO,
+                            font_family="Roboto"
+                        ),
+                    ], spacing=10),
+                    ft.Row([
+                        ft.Icon(ft.Icons.MONITOR_WEIGHT_OUTLINED, size=18, color=ft.Colors.GREY_600),
+                        ft.Text(
+                            f"Peso: {self.paciente_info.get('peso', 'N/A')} kg",
+                            size=13,
+                            color=self.COLOR_TEXTO,
+                            font_family="Roboto"
+                        ),
+                        ft.Text("|", color=ft.Colors.GREY_400),
+                        ft.Text(
+                            f"Talla: {self.paciente_info.get('talla', 'N/A')} m",
+                            size=13,
+                            color=self.COLOR_TEXTO,
+                            font_family="Roboto"
+                        ),
+                    ], spacing=10),
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Icon(ft.Icons.WARNING_AMBER, size=18, color=self.COLOR_ERROR),
+                            ft.Text(
+                                f"Enfermedades: {self.paciente_info.get('enfermedades', 'Ninguna')}",
+                                size=13,
+                                weight=ft.FontWeight.W_500,
+                                color=self.COLOR_ERROR,
+                                font_family="Roboto"
+                            ),
+                        ], spacing=10),
+                        padding=10,
+                        bgcolor=ft.Colors.with_opacity(0.1, self.COLOR_ERROR),
+                        border_radius=8,
+                    ),
+                ], spacing=12),
+                padding=20,
+            ),
+            elevation=5,
+            margin=ft.margin.only(bottom=15)
+        )
 
         # 2. FORMULARIO DE ATENCIÓN
-        form_column = ft.Container(
-            content=ft.Column([
-                ft.Text("📝 Registro de la Consulta", size=20, weight=ft.FontWeight.BOLD, color=self.COLOR_TEXTO, font_family="Roboto"),
-                ft.Divider(),
-                self.sistema,
-                self.diagnostico,
-                self.recomendaciones,
-                
-                # Fila de Carga de Imágenes
-                ft.Row(
-                    [
-                        ft.ElevatedButton(
-                            "Cargar Imágenes", icon=ft.Icons.UPLOAD_FILE, 
-                            bgcolor=self.COLOR_PRIMARIO, color="white",
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), elevation=5),
-                            on_click=lambda e: self.file_picker.pick_files(allow_multiple=True),
-                            tooltip="Seleccionar imágenes para análisis YOLO"
+        form_card = ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.EDIT_NOTE, color=self.COLOR_PRIMARIO, size=24),
+                        ft.Text(
+                            "Registro de Consulta",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=self.COLOR_TEXTO,
+                            font_family="Roboto"
                         ),
-                        self.image_count_text # Muestra el contador de imágenes
-                    ],
-                    alignment=ft.MainAxisAlignment.START, spacing=15
-                ),
-                
-                ft.Divider(height=20),
-                
-                # Fila de Acciones (Guardar y Volver)
-                ft.Row(
-                    [
+                    ]),
+                    ft.Divider(height=10, color=ft.Colors.GREY_300),
+                    self.sistema,
+                    self.diagnostico,
+                    self.recomendaciones,
+                    ft.Row([
                         ft.ElevatedButton(
-                            "Guardar Atención", icon=ft.Icons.SAVE_AS, width=220, 
-                            bgcolor=self.COLOR_EXITO, color="white",
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), elevation=8),
-                            on_click=self.guardar_atencion
+                            "📎 Adjuntar Imágenes",
+                            icon=ft.Icons.UPLOAD_FILE,
+                            bgcolor=self.COLOR_PRIMARIO,
+                            color=ft.Colors.WHITE,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
+                            on_click=lambda e: self.file_picker.pick_files(allow_multiple=True)
                         ),
-                        ft.ElevatedButton(
-                            "Volver a Citas", icon=ft.Icons.ARROW_BACK, width=220, 
-                            bgcolor=self.COLOR_ERROR, color="white",
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), elevation=5),
-                            on_click=lambda e: self.on_navigate("citas")
-                        )
-                    ], 
-                    alignment=ft.MainAxisAlignment.CENTER, spacing=30
-                )
-            ], spacing=15),
-            padding=20,
-            bgcolor=self.COLOR_FONDO_CARD,
-            border_radius=15
-        )
-        form_card = ft.Card(content=form_column, elevation=8, expand=3) # Expand 3 para darle más peso
-
-        # 3. RESULTADOS YOLO (Separado y con scroll)
-        yolo_column = ft.Container(
-            content=ft.Column([
-                ft.Text("🔍 Resultados de Detección (YOLO)", size=20, weight=ft.FontWeight.BOLD, color=self.COLOR_TEXTO, font_family="Roboto"),
-                ft.Divider(),
-                self.yolo_results
-            ], spacing=10, scroll=ft.ScrollMode.ADAPTIVE),
-            padding=20,
-            bgcolor=self.COLOR_FONDO_CARD,
-            border_radius=15,
-            expand=2 # Expand 2 para que ocupe menos espacio que el formulario
-        )
-        yolo_card = ft.Card(content=yolo_column, elevation=8, expand=2)
-
-        # 4. DISTRIBUCIÓN GENERAL (Header, Paciente, y Dos Columnas)
-        main_column_content = ft.Column( # Cambiamos el nombre de la variable para ser más claros
-            [
-                ft.Text("ATENCIÓN CLÍNICA DETALLADA", size=28, weight=ft.FontWeight.W_900, color=self.COLOR_TEXTO, font_family="Roboto", text_align=ft.TextAlign.CENTER),
-                paciente_card,
-                ft.Row(
-                    [
-                        form_card,
-                        yolo_card
-                    ],
-                    expand=True,
-                    vertical_alignment=ft.CrossAxisAlignment.START # Alineación superior
-                )
-            ],
-            scroll=ft.ScrollMode.ADAPTIVE,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            expand=True,
-            # Se eliminó 'padding=20' de aquí
+                        self.image_count_text
+                    ], spacing=15, alignment=ft.MainAxisAlignment.START),
+                    ft.Divider(height=10),
+                    ft.ElevatedButton(
+                        "Guardar Atención",
+                        icon=ft.Icons.SAVE,
+                        width=250,
+                        height=45,
+                        bgcolor=self.COLOR_EXITO,
+                        color=ft.Colors.WHITE,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
+                        on_click=self.guardar_atencion
+                    ),
+                ], spacing=15, scroll=ft.ScrollMode.AUTO),  # Habilitar scroll
+                padding=20,
+            ),
+            elevation=5,
+            margin=ft.margin.only(bottom=15)
         )
 
-        # 🛑 SOLUCIÓN: Envolver el Column en un Container y aplicar el padding aquí.
-        main_content = ft.Container(
-            content=main_column_content,
-            padding=20, # Aplicamos el padding al Container
-            expand=True
+        # 3. RESULTADOS YOLO
+        yolo_card = ft.Card(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.BIOTECH, color=self.COLOR_PRIMARIO, size=24),
+                        ft.Text(
+                            "Resultados de Análisis YOLO",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=self.COLOR_TEXTO,
+                            font_family="Roboto"
+                        ),
+                    ]),
+                    ft.Divider(height=10, color=ft.Colors.GREY_300),
+                    ft.Container(
+                        content=self.yolo_results,
+                        expand=True,
+                    )
+                ], spacing=10, scroll=ft.ScrollMode.AUTO),  # Habilitar scroll
+                padding=20,
+                expand=True,
+            ),
+            elevation=5,
         )
 
-        self.page.add(main_content)
+        # Layout con dos columnas
+        main_content = ft.Column([
+            header,
+            paciente_card,
+            ft.Row([
+                ft.Container(content=form_card, expand=3),
+                ft.Container(content=yolo_card, expand=2),
+            ], expand=True, spacing=15, alignment=ft.MainAxisAlignment.START),
+        ], spacing=0, expand=True, scroll=ft.ScrollMode.AUTO)  # Habilitar scroll en el contenedor principal
+
+        self.page.add(
+            ft.Container(
+                content=main_content,
+                bgcolor=self.COLOR_FONDO_CLARO,
+                padding=10,
+                expand=True,
+            )
+        )
         self.page.update()
