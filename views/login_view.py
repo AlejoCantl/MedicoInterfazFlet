@@ -52,38 +52,88 @@ class LoginView:
 
     def show(self):
         self.page.clean()
+        self.login_status.value = ""  # Limpiar estado al mostrar
 
-        # Fondo
-        background = ft.Container(expand=True, content=ft.Image(src=self.bg_path, fit=ft.ImageFit.COVER, opacity=0.8))
+        # Configurar la página para que ocupe toda la pantalla
+        self.page.padding = 0
+        self.page.spacing = 0
 
-        # Logo
-        logo = ft.Image(src=self.logo_path, width=150, height=150, fit=ft.ImageFit.CONTAIN)
-
-        # Formulario
-        form = ft.Card(
-            content=ft.Container(
-                padding=30,
-                content=ft.Column([
-                    logo,
-                    ft.Text("Acceso Médico", size=24, weight=ft.FontWeight.BOLD, color=self.COLOR_PRIMARIO, font_family="Roboto", text_align=ft.TextAlign.CENTER),
-                    ft.Divider(height=20, color="transparent"),
-                    self.username,
-                    self.password,
-                    self.login_btn,
-                    self.login_status
-                ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                bgcolor="white",
-                border_radius=15
+        # Fondo que cubre toda la pantalla
+        background_container = ft.Container(
+            expand=True,
+            content=ft.Image(
+                src=self.bg_path, 
+                fit=ft.ImageFit.COVER,
+                width=self.page.width,  # Ancho de la página
+                height=self.page.height,  # Alto de la página
+                opacity=0.8,
             ),
-            elevation=10,
-            margin=20,
-            width=400
+            margin=0,
+            padding=0,
         )
 
+        # Formulario centrado
+        login_form = ft.Card(
+            content=ft.Container(
+                padding=25,
+                width=340,
+                content=ft.Column(
+                    [
+                        ft.Image(src=self.logo_path, width=100, height=100, fit=ft.ImageFit.CONTAIN), 
+                        ft.Text(
+                            "Acceso Médico", 
+                            size=22, 
+                            weight=ft.FontWeight.W_900, 
+                            color=self.COLOR_PRIMARIO, 
+                            font_family="Roboto", 
+                            text_align=ft.TextAlign.CENTER
+                        ),
+                        ft.Divider(height=5, color="transparent"),
+                        self.username,
+                        self.password,
+                        ft.Container(height=8),  # Espaciado
+                        self.login_btn,
+                        self.login_status
+                    ], 
+                    spacing=10, 
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                ),
+                bgcolor=ft.Colors.with_opacity(0.85, ft.Colors.WHITE),
+                border_radius=15,
+                blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR)
+            ),
+            elevation=8,
+            color=ft.Colors.with_opacity(0.3, ft.Colors.WHITE)
+        )
+
+        # Contenedor que centra el formulario
+        centered_content = ft.Container(
+            content=ft.Container(
+                    content=login_form,
+                    width=420,  # Dimensiones aquí en el contenedor interno
+                    height=420,
+                     ),
+            alignment=ft.alignment.center,
+            expand=True  # El contenedor padre se expande para centrar el contenido interno
+            )
+
+        # Stack principal
+        main_stack = ft.Stack(
+            [
+                background_container,
+                centered_content
+            ], 
+            expand=True
+        )
+
+        # Contenedor final
         self.page.add(
-            ft.Stack([
-                background,
-                ft.Container(content=form, alignment=ft.alignment.center)
-            ], expand=True)
+            ft.Container(
+                content=main_stack,
+                expand=True,
+                padding=0,
+                margin=0,
+                bgcolor=ft.Colors.BLACK
+            )
         )
         self.page.update()

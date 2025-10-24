@@ -1,6 +1,6 @@
 # api_client.py
 import requests
-from typing import List, Dict, Optional
+from typing import List, Dict
 import os
 from dotenv import load_dotenv
 
@@ -15,7 +15,6 @@ class APIClient:
         self.rol_id = None
 
     def _handle_response(self, response: requests.Response) -> Dict:
-        """Manejo centralizado de respuestas"""
         if response.status_code == 200:
             return response.json()
         elif response.status_code == 401:
@@ -51,10 +50,10 @@ class APIClient:
         return self._handle_response(response)
 
     def get_citas_aprobadas(self) -> List[Dict]:
-        """Obtiene citas aprobadas del médico"""
         response = self.session.get(f"{API_URL}/Medico/citas/aprobadas")
+        # Nota: La línea de impresión original era confusa, pero la lógica de manejo de datos es correcta.
         data = self._handle_response(response)
-        return data.get("citas", []) if "error" not in data else []
+        return data.get("citas_aprobadas", []) if "error" not in data else []
 
     def get_historial_medico(self, nombre: str = None, identificacion: str = None) -> List[Dict]:
         params = {}
@@ -67,50 +66,55 @@ class APIClient:
         return data.get("historial", []) if "error" not in data else []
 
     def get_paciente_info(self, paciente_id: int) -> Dict:
-        """Obtiene datos del paciente para mostrar en atención"""
         response = self.session.get(f"{API_URL}/Medico/paciente/{paciente_id}")
         data = self._handle_response(response)
         return data if "error" not in data else {}
 
     def registrar_atencion(
         self,
-        paciente_id: int,
-        sintomas: str,
+        cita_id: int,
+        sistema: str,
         diagnostico: str,
         recomendaciones: str,
         imagenes: List = []
-    ) -> Dict:
-        """
-        Registra atención con imágenes.
-        Usa multipart/form-data correctamente.
-        """
+        ) -> Dict:
         data = {
-            "sintomas": sintomas,
+            "cita_id": cita_id,
+            "sistema": sistema,
             "diagnostico": diagnostico,
             "recomendaciones": recomendaciones
         }
-        files = []
+        
+        # 1. Creamos dos listas: una para los archivos de la solicitud y otra para los objetos que deben cerrarse.
+        files_for_request = []
+        files_to_close = [] 
+        
         try:
             for img in imagenes:
-                # Abrir archivo en modo binario
                 file_obj = open(img.path, 'rb')
-                files.append(('imagenes', (img.name, file_obj, 'image/jpeg')))
+                files_to_close.append(file_obj) # Guardamos el objeto file para el cierre
+                
+                # Formato de la tupla para la solicitud POST de requests: ('nombre_campo', (nombre_archivo, objeto_archivo, tipo_mime))
+                files_for_request.append(('imagenes', (img.name, file_obj, 'image/jpeg')))
             
             response = self.session.post(
                 f"{API_URL}/Medico/atencion",
                 data=data,
-                files=files
+                files=files_for_request # Usamos la lista de la solicitud
             )
             return self._handle_response(response)
+        
         except Exception as e:
-            return {"error": f"Error al subir imágenes: {e}"}
+            return {"error": f"Error al subir imágenes o realizar la solicitud: {e}"}
+        
         finally:
-            # CERRAR TODOS LOS ARCHIVOS
-            for _, file_obj, _ in files:
+            # 2. Recorremos SOLAMENTE los objetos de archivo que necesitamos cerrar.
+            for file_obj in files_to_close: 
                 try:
                     file_obj.close()
-                except:
+                except Exception as e:
+                    print(f"Error cerrando archivo: {e}") 
                     pass
 
     def is_logged_in(self) -> bool:
-        return self.token is not None and self.user_id is not None
+        return self.token is not None and self.user_id is not None and self.rol_id is not None
