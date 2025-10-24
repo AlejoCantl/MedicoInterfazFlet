@@ -12,6 +12,7 @@ class LoginView:
         self.COLOR_TEXTO = "#343A40"
         self.COLOR_EXITO = "#28A745"
         self.COLOR_ERROR = "#DC3545"
+        self.COLOR_WARNING = "#FFC107"
 
         # Rutas
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -21,38 +22,81 @@ class LoginView:
 
         # Campos
         self.username = ft.TextField(
-            label="Usuario", border_radius=10, width=300, bgcolor="white", border_color=self.COLOR_PRIMARIO,
-            focused_border_color=self.COLOR_PRIMARIO, label_style=ft.TextStyle(color=self.COLOR_TEXTO, font_family="Roboto"),
+            label="Usuario", 
+            border_radius=10, 
+            width=300, 
+            bgcolor="white", 
+            border_color=self.COLOR_PRIMARIO,
+            focused_border_color=self.COLOR_PRIMARIO, 
+            label_style=ft.TextStyle(color=self.COLOR_TEXTO, font_family="Roboto"),
             text_style=ft.TextStyle(font_family="Roboto")
         )
         self.password = ft.TextField(
-            label="Contraseña", password=True, can_reveal_password=True, border_radius=10, width=300, bgcolor="white",
-            border_color=self.COLOR_PRIMARIO, focused_border_color=self.COLOR_PRIMARIO, label_style=ft.TextStyle(color=self.COLOR_TEXTO, font_family="Roboto"),
-            text_style=ft.TextStyle(font_family="Roboto")
+            label="Contraseña", 
+            password=True, 
+            can_reveal_password=True, 
+            border_radius=10, 
+            width=300, 
+            bgcolor="white",
+            border_color=self.COLOR_PRIMARIO, 
+            focused_border_color=self.COLOR_PRIMARIO, 
+            label_style=ft.TextStyle(color=self.COLOR_TEXTO, font_family="Roboto"),
+            text_style=ft.TextStyle(font_family="Roboto"),
+            on_submit=self.do_login  # Permite login con Enter
         )
-        self.login_status = ft.Text(size=14, weight=ft.FontWeight.BOLD, font_family="Roboto")
+        self.login_status = ft.Text(
+            size=14, 
+            weight=ft.FontWeight.BOLD, 
+            font_family="Roboto",
+            text_align=ft.TextAlign.CENTER
+        )
 
         # Botón
         self.login_btn = ft.ElevatedButton(
-            text="Iniciar Sesión", height=50, width=300, bgcolor=self.COLOR_PRIMARIO, color="white",
+            text="Iniciar Sesión", 
+            height=50, 
+            width=300, 
+            bgcolor=self.COLOR_PRIMARIO, 
+            color="white",
             style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), elevation=5),
             on_click=self.do_login
         )
 
     def do_login(self, e):
-        if self.api.login(self.username.value, self.password.value):
+        # Validación de campos vacíos
+        if not self.username.value or not self.password.value:
+            self.login_status.value = "Por favor complete todos los campos"
+            self.login_status.color = self.COLOR_WARNING
+            self.page.update()
+            return
+
+        # Deshabilitar botón durante el login
+        self.login_btn.disabled = True
+        self.login_status.value = "Iniciando sesión..."
+        self.login_status.color = self.COLOR_PRIMARIO
+        self.page.update()
+
+        # Realizar login
+        result = self.api.login(self.username.value, self.password.value)
+        
+        # Habilitar botón nuevamente
+        self.login_btn.disabled = False
+
+        if result["success"]:
             self.login_status.value = "¡Login exitoso!"
             self.login_status.color = self.COLOR_EXITO
             self.page.update()
             self.on_login_success()
         else:
-            self.login_status.value = "Credenciales inválidas"
+            self.login_status.value = result["message"]
             self.login_status.color = self.COLOR_ERROR
-        self.page.update()
+            self.page.update()
 
     def show(self):
         self.page.clean()
         self.login_status.value = ""  # Limpiar estado al mostrar
+        self.username.value = ""  # Limpiar campos
+        self.password.value = ""
 
         # Configurar la página para que ocupe toda la pantalla
         self.page.padding = 0
@@ -64,8 +108,8 @@ class LoginView:
             content=ft.Image(
                 src=self.bg_path, 
                 fit=ft.ImageFit.COVER,
-                width=self.page.width,  # Ancho de la página
-                height=self.page.height,  # Alto de la página
+                width=self.page.width,
+                height=self.page.height,
                 opacity=0.8,
             ),
             margin=0,
@@ -79,7 +123,12 @@ class LoginView:
                 width=340,
                 content=ft.Column(
                     [
-                        ft.Image(src=self.logo_path, width=100, height=100, fit=ft.ImageFit.CONTAIN), 
+                        ft.Image(
+                            src=self.logo_path, 
+                            width=100, 
+                            height=100, 
+                            fit=ft.ImageFit.CONTAIN
+                        ), 
                         ft.Text(
                             "Acceso Médico", 
                             size=22, 
@@ -91,7 +140,7 @@ class LoginView:
                         ft.Divider(height=5, color="transparent"),
                         self.username,
                         self.password,
-                        ft.Container(height=8),  # Espaciado
+                        ft.Container(height=8),
                         self.login_btn,
                         self.login_status
                     ], 
@@ -109,13 +158,13 @@ class LoginView:
         # Contenedor que centra el formulario
         centered_content = ft.Container(
             content=ft.Container(
-                    content=login_form,
-                    width=420,  # Dimensiones aquí en el contenedor interno
-                    height=420,
-                     ),
+                content=login_form,
+                width=420,
+                height=420,
+            ),
             alignment=ft.alignment.center,
-            expand=True  # El contenedor padre se expande para centrar el contenido interno
-            )
+            expand=True
+        )
 
         # Stack principal
         main_stack = ft.Stack(

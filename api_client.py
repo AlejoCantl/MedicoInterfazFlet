@@ -3,6 +3,8 @@ import requests
 from typing import List, Dict
 import os
 from dotenv import load_dotenv
+import jwt
+from datetime import datetime
 
 load_dotenv()
 API_URL = os.getenv("API_URL", "http://localhost:8000")
@@ -13,6 +15,26 @@ class APIClient:
         self.token = None
         self.user_id = None
         self.rol_id = None
+
+    def _decode_token(self, token: str) -> Dict:
+        """
+        Decodifica el JWT sin verificar la firma (solo lectura)
+        Retorna el payload del token
+        """
+        try:
+            # Decodificar sin verificar la firma (options={"verify_signature": False})
+            payload = jwt.decode(token, options={"verify_signature": False})
+            print(f"[DEBUG DECODE] Payload decodificado: {payload}")
+            return payload
+        except jwt.ExpiredSignatureError:
+            print("[DEBUG DECODE] Token expirado")
+            return {"error": "Token expirado"}
+        except jwt.InvalidTokenError as e:
+            print(f"[DEBUG DECODE] Token inválido: {e}")
+            return {"error": "Token inválido"}
+        except Exception as e:
+            print(f"[DEBUG DECODE] Error decodificando token: {e}")
+            return {"error": f"Error al decodificar: {str(e)}"}
 
     def _handle_response(self, response: requests.Response) -> Dict:
         if response.status_code == 200:
@@ -26,24 +48,74 @@ class APIClient:
         else:
             return {"error": f"Error {response.status_code}: {response.text}"}
 
-    def login(self, username: str, password: str) -> bool:
+    def login(self, username: str, password: str) -> Dict:
+        """
+        Realiza el login y valida que el usuario sea médico (rol_id = 2)
+        decodificando el JWT directamente
+        Retorna un diccionario con 'success' (bool) y 'message' (str)
+        """
         try:
             response = self.session.post(f"{API_URL}/Usuario/login", json={
                 "nombre_usuario": username,
                 "contrasena": password
             })
+            
             if response.status_code == 200:
                 data = response.json()
-                self.token = data["access_token"]
+                token = data["access_token"]
+                
+                # 🔍 DECODIFICAR EL TOKEN
+                payload = self._decode_token(token)
+                
+                if "error" in payload:
+                    return {
+                        "success": False,
+                        "message": f"Error en el token: {payload['error']}"
+                    }
+                
+                # 📋 EXTRAER DATOS DEL TOKEN
+                self.user_id = payload.get("sub")  # El 'sub' contiene el user_id
+                self.rol_id = payload.get("rol_id")
+                token_exp = payload.get("exp")
+                
+                print(f"[DEBUG] user_id: {self.user_id}, rol_id: {self.rol_id}, exp: {token_exp}")
+                
+                # ✅ VALIDACIÓN DE ROL MÉDICO
+                if self.rol_id != 2:
+                    self._clear_session()
+                    return {
+                        "success": False,
+                        "message": "Acceso denegado. Rol inválido."
+                    }
+                
+                # ✅ TODO OK: Guardar token y configurar sesión
+                self.token = token
                 self.session.headers.update({"Authorization": f"Bearer {self.token}"})
-                profile = self.get_profile()
-                self.user_id = profile.get("user_id")
-                self.rol_id = profile.get("rol_id")
-                return True
-            return False
+                
+                return {
+                    "success": True,
+                    "message": "Login exitoso"
+                }
+            
+            return {
+                "success": False,
+                "message": "Credenciales inválidas"
+            }
+            
         except Exception as e:
             print(f"[API] Error login: {e}")
-            return False
+            self._clear_session()
+            return {
+                "success": False,
+                "message": f"Error de conexión: {str(e)}"
+            }
+
+    def _clear_session(self):
+        """Limpia la sesión actual"""
+        self.token = None
+        self.user_id = None
+        self.rol_id = None
+        self.session.headers.pop("Authorization", None)
 
     def get_profile(self) -> Dict:
         response = self.session.get(f"{API_URL}/Usuario/perfil")
@@ -51,7 +123,6 @@ class APIClient:
 
     def get_citas_aprobadas(self) -> List[Dict]:
         response = self.session.get(f"{API_URL}/Medico/citas/aprobadas")
-        # Nota: La línea de impresión original era confusa, pero la lógica de manejo de datos es correcta.
         data = self._handle_response(response)
         return data.get("citas_aprobadas", []) if "error" not in data else []
 
@@ -85,22 +156,19 @@ class APIClient:
             "recomendaciones": recomendaciones
         }
         
-        # 1. Creamos dos listas: una para los archivos de la solicitud y otra para los objetos que deben cerrarse.
         files_for_request = []
         files_to_close = [] 
         
         try:
             for img in imagenes:
                 file_obj = open(img.path, 'rb')
-                files_to_close.append(file_obj) # Guardamos el objeto file para el cierre
-                
-                # Formato de la tupla para la solicitud POST de requests: ('nombre_campo', (nombre_archivo, objeto_archivo, tipo_mime))
+                files_to_close.append(file_obj)
                 files_for_request.append(('imagenes', (img.name, file_obj, 'image/jpeg')))
             
             response = self.session.post(
                 f"{API_URL}/Medico/atencion",
                 data=data,
-                files=files_for_request # Usamos la lista de la solicitud
+                files=files_for_request
             )
             return self._handle_response(response)
         
@@ -108,7 +176,6 @@ class APIClient:
             return {"error": f"Error al subir imágenes o realizar la solicitud: {e}"}
         
         finally:
-            # 2. Recorremos SOLAMENTE los objetos de archivo que necesitamos cerrar.
             for file_obj in files_to_close: 
                 try:
                     file_obj.close()
@@ -117,4 +184,4 @@ class APIClient:
                     pass
 
     def is_logged_in(self) -> bool:
-        return self.token is not None and self.user_id is not None and self.rol_id is not None
+        return self.token is not None and self.user_id is not None and self.rol_id == 2
