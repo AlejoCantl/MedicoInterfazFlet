@@ -22,7 +22,7 @@ class AtencionView:
 
         # Campos del formulario
         self.sistema = ft.TextField(
-            label="Sistema afectado (Motivo de Consulta)", 
+            label="Sistema afectado", 
             multiline=True, 
             min_lines=3, 
             max_lines=5, 
@@ -31,10 +31,10 @@ class AtencionView:
             border_radius=10,
             text_style=text_style,
             label_style=label_style,
-            hint_text="Describe los síntomas y sistemas involucrados"
+            hint_text="Sistemas involucrado"
         )
         self.diagnostico = ft.TextField(
-            label="Diagnóstico (CIE-10)", 
+            label="Diagnóstico", 
             multiline=True, 
             min_lines=3, 
             max_lines=7, 
