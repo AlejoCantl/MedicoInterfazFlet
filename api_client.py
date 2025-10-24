@@ -1,6 +1,6 @@
 # api_client.py
 import requests
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
 
@@ -13,6 +13,19 @@ class APIClient:
         self.token = None
         self.user_id = None
         self.rol_id = None
+
+    def _handle_response(self, response: requests.Response) -> Dict:
+        """Manejo centralizado de respuestas"""
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 401:
+            self.token = None
+            self.session.headers.pop("Authorization", None)
+            return {"error": "Sesión expirada. Inicie sesión nuevamente."}
+        elif response.status_code == 403:
+            return {"error": "Acceso denegado."}
+        else:
+            return {"error": f"Error {response.status_code}: {response.text}"}
 
     def login(self, username: str, password: str) -> bool:
         try:
@@ -35,11 +48,13 @@ class APIClient:
 
     def get_profile(self) -> Dict:
         response = self.session.get(f"{API_URL}/Usuario/perfil")
-        return response.json() if response.status_code == 200 else {}
+        return self._handle_response(response)
 
     def get_citas_aprobadas(self) -> List[Dict]:
-        response = self.session.get(f"{API_URL}/Paciente/citas")
-        return response.json().get("citas", []) if response.status_code == 200 else []
+        """Obtiene citas aprobadas del médico"""
+        response = self.session.get(f"{API_URL}/Medico/citas/aprobadas")
+        data = self._handle_response(response)
+        return data.get("citas", []) if "error" not in data else []
 
     def get_historial_medico(self, nombre: str = None, identificacion: str = None) -> List[Dict]:
         params = {}
@@ -48,20 +63,54 @@ class APIClient:
         if identificacion:
             params["identificacion"] = identificacion
         response = self.session.get(f"{API_URL}/Medico/historial", params=params)
-        return response.json().get("historial", []) if response.status_code == 200 else []
+        data = self._handle_response(response)
+        return data.get("historial", []) if "error" not in data else []
 
-    def registrar_atencion(self, paciente_id: int, sintomas: str, diagnostico: str, recomendaciones: str, imagenes=[]) -> Dict:
-        files = []
+    def get_paciente_info(self, paciente_id: int) -> Dict:
+        """Obtiene datos del paciente para mostrar en atención"""
+        response = self.session.get(f"{API_URL}/Medico/paciente/{paciente_id}")
+        data = self._handle_response(response)
+        return data if "error" not in data else {}
+
+    def registrar_atencion(
+        self,
+        paciente_id: int,
+        sintomas: str,
+        diagnostico: str,
+        recomendaciones: str,
+        imagenes: List = []
+    ) -> Dict:
+        """
+        Registra atención con imágenes.
+        Usa multipart/form-data correctamente.
+        """
         data = {
             "sintomas": sintomas,
             "diagnostico": diagnostico,
             "recomendaciones": recomendaciones
         }
-        for img in imagenes:
-            files.append(('imagenes', (img.name, open(img.path, 'rb'), 'image/jpeg')))
-        response = self.session.post(
-            f"{API_URL}/Medico/atencion?paciente_id={paciente_id}",
-            data=data,
-            files=files
-        )
-        return response.json() if response.status_code == 200 else {"error": response.text}
+        files = []
+        try:
+            for img in imagenes:
+                # Abrir archivo en modo binario
+                file_obj = open(img.path, 'rb')
+                files.append(('imagenes', (img.name, file_obj, 'image/jpeg')))
+            
+            response = self.session.post(
+                f"{API_URL}/Medico/atencion",
+                data=data,
+                files=files
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            return {"error": f"Error al subir imágenes: {e}"}
+        finally:
+            # CERRAR TODOS LOS ARCHIVOS
+            for _, file_obj, _ in files:
+                try:
+                    file_obj.close()
+                except:
+                    pass
+
+    def is_logged_in(self) -> bool:
+        return self.token is not None and self.user_id is not None
